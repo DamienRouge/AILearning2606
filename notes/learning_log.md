@@ -9,6 +9,94 @@ metadata:
 
 ## Concepts Learned
 
+### 2026-07-14 — SRE agent definition (spec.yaml) + tool placement (Day 5 part 2, completes Day 5)
+
+Second half of Day 5 (part 1 = SRE streaming internals, logged same day). Had to RE-TEACH spec.yaml slowly — Damien correctly said "I haven't learned spec.yaml" after I jumped to a quiz on it (presenting ≠ learning; don't quiz before absorption). This half = the agent DEFINITION.
+
+**spec.yaml = an agent's "job description" (declarative config, `kind: AgentConfiguration`):** answers which tools + which instructions + what behavior mode + name. Same declarative-YAML idea as Day 3 routing.yaml (data describing intent, not code). First time seeing an agent DECLARED explicitly — the portal agent's definition was hidden in Foundry; the SRE agent's is a readable file. This is where "layer ① base agent prompt" (mentioned since Day 3) finally lives.
+
+**Two tool lists = allow-lists (GRANTED access, NOT copied/inherited):**
+- `tools:` (~65) = built-in Azure SRE PLATFORM tools (IcM ops GetIncidentDetails/PostDiscussionEntry, charting PlotBarChart, ExecutePythonCode, CreateFixPullRequest, pipelines, SearchMemory). Hosted/implemented by Azure; spec just REFERENCES by name. Analogy: badge granted access to shared printer (not your own copy).
+- `mcpTools:` = the diagnostics MCP server's tools (Day 2!) — `diagnostics-mcp_search_relevant_docs`, `_query_geneva_metrics`, `_execute_kusto_query`. Prefix names the source server. Same allow-list/grant model.
+
+**WHERE the two lists RUN (key split, ties to Day 1 tool-use):** LLM calls both IDENTICALLY (emit tool_use → get result). Executor differs: native `tools` run on Azure SRE platform; `mcpTools` run on THIS repo's MCP server. LLM doesn't know/care which — the tool abstraction hides the executor.
+
+**instructions = INJECTED AT BUILD TIME (spec has only a comment, no instructions field):** spec.yaml is the TEMPLATE/output, not the source. Pointer lives in `subagent-config.json` (PromptFile field), NOT in spec.yaml. Chain: subagent-config.json (PromptFile=troubleshoot-guidance-w365.md) → Day-3 prompt COMPOSER resolves it → Build-SubAgentEv2.ps1 injects text into `instructions` before deploy. So SRE composes at BUILD time (baked in once at deploy); portal composes at REQUEST time (live per-request). Same composer, different timing.
+
+**agentType: Autonomous** = the behavior switch. Autonomous = acts on its own (incident/cron triggered, no human per step) vs interactive (portal waits for human). ScheduledTask (kind: ScheduledTask, `cronExpression: 30 2 * * *` = 2:30 AM daily, agentMode: autonomous) = the clock trigger (Day-3 three-triggers made concrete).
+
+**SYSTEMS-LENS ANSWER "why same tools → different behaviors":** behavior lives in the DEFINITION around the tools, NOT the tools. Three differences: (1) INSTRUCTIONS (portal: help-a-human/conversational; SRE: investigate-end-to-end + post-to-IcM + open-PR), (2) TOOL MIX (SRE has ACTION tools CreateFixPullRequest/PostDiscussionEntry the portal chat lacks), (3) AUTONOMY (autonomous vs interactive). Same search_relevant_docs, different agent → different behavior. Concrete: incident at 3AM → portal does nothing (needs human); SRE wakes, searches runbook, checks metrics, posts findings, maybe opens PR — no human.
+
+**TOOL PLACEMENT (corrected "tools between frontend and backend" framing):** tools are NOT between frontend/backend and NOT near the frontend at all. A tool = a function the LLM calls during the loop to touch REAL SYSTEMS (IcM, Kusto, Geneva, repos) — on the AGENT/PLATFORM side. Frontend only WATCHES the narration stream by (SSE). "Process data and call functions" = right; they connect LLM→outside-world, not frontend→backend. Placement: browser ↔ host (SSE) ↔ agent(LLM+loop) → tools → real systems. Tools live at the far right.
+
+**WEEK 1 COMPLETE (Days 1-5): the full system now traceable** — MCP server (Day 2 tools + Day 3 prompts, SHARED) used by TWO hosts: portal (Day 4, interactive, human-driven, SSE stream) and SRE agent (Day 5, autonomous, spec.yaml-defined, cron/incident-triggered, polling stream). Behavior differs by host+definition, tools are shared.
+
+### 2026-07-14 — SRE Agent host + polling/streaming internals (Day 5 part 1, current branch code)
+
+Repo moved ahead of the Day-4 snapshot: on branch `lucaszhang/agent-mode-sre-backend`, `stream.py` was replaced by `sre_stream.py` (~50KB) + rewritten `handler.py`. The generic Foundry push-stream (`responses.create(stream=True)`) is GONE; the current SRE-agent-mode backend uses REST POLLING + optional SignalR hub. Self-corrected two models (hub-vs-polling inverted; "one message per turn").
+
+**Architecture shift:** backend = Azure SRE Agent data plane (not Foundry Responses API). Conversation unit = THREAD (`conversationId == thread_id`). Two handlers: `handle_conversation_sre` (new/continued) + `handle_resume_sre` (reattach after page reload). Border into SRE agent = `create_thread`/`post_message` (send) + POLL `get_messages` (receive) — NOT one pushed stream.
+
+**Hybrid: polling backbone + hub fast-path (was INVERTED — corrected):**
+- POLLING = mandatory backbone, always runs, carries tool cards/reasoning/structure + complete fallback + streams text when hub off. Cannot be removed.
+- HUB (SignalR) = OPTIONAL accelerator, only for fast text tokens + authoritative `SignalProcessingComplete` completion. System works fully without it (laggier text + heuristic completion). Polling is source of truth, hub is turbo for text.
+- When hub text on, REST text SUPPRESSED (`_suppress_rest_text`) to avoid double-emit.
+
+**Who decides if hub is "on" = THREE independent deciders, all ANDed (`use_hub_text = use_signalr and hub_text_enabled and not self.resume`):**
+1. NETWORK: `listener.start()` — did the WebSocket physically connect? (firewall/proxy/auth can block)
+2. OPS CONFIG: `get_hub_text_streaming()` — feature flag ops set on/off (policy-in-config, no redeploy)
+3. REQUEST TYPE: `not resume` — hub can't REPLAY text from before it connected, so resume falls back to REST (first poll re-emits full current answer). Hub = LIVE channel, no memory of past pushes.
+- Any false → polling streams text. That's WHY polling is the non-removable backbone.
+
+**Poll interval (adaptive):** 0.8s normally; 0.3s once completion_seen (answer imminent). Ceilings: MAX_STREAM=600s, FIRST_RESPONSE_TIMEOUT=150s. Heartbeat every 10s → `_SSE_HEARTBEAT` keeps SSE warm through quiet gaps (else intermediary idle-timeout drops it, client misreads as end-of-turn).
+
+**TURN = MANY messages (thought 1 — CORRECTED):** one turn = user msg + one message per tool call + one per reasoning block + (usually) ONE answer-text message. Only the answer-text message GROWS char-by-char (same id, text lengthens each poll). Tool/reasoning messages are DISCRETE (separate whole units, not lengthening).
+
+**Message is NOT a stream — it's a GROWING RECORD.** Server assigns each message a stable id + timestamp. `_chronological_messages` sorts AMONG the turn's messages (by timestamp), NOT within a message. `get_messages` requests `orderby: timestamp`; client re-stitches across pages.
+
+**THE DIFF-ENGINE DELTA TRICK (how snapshots fake a stream) — core insight:** portal = memory-light DIFF ENGINE. Per message id it remembers only `_emitted_text_len {id: charcount}` (an int) + `_emitted_tool_payloads {id: fingerprint}`, NOT content. Each poll: `if len(text) > already: delta = text[already:]; emit(delta)`. Forwards ONLY the new suffix even though the poll returned the WHOLE text. (git diff analogy.) Browser appends chunks → sees token-by-token stream. Tools = same keyed on payload fingerprint.
+
+**baseline_ids = turn-mapping + idempotency:** snapshot all existing message ids BEFORE posting. Everything NOT in baseline_ids = THIS turn's response (maps response→question positionally). ALSO enables "never duplicate a turn": on lost `post_message` response, `_send_follow_up` VERIFIES whether the msg landed instead of blind-retrying. Idempotency via verification.
+
+**WHO holds context server-side = the THREAD (not loop, not LLM):** durable Azure-managed storage holding ordered messages = the conversation memory the LLM reasons over. Reached ONLY via REST; portal holds just thread_id. Adding new question to context = SERVER's job on post_message (NOT host — thread model = server owns/grows context, host stateless about content).
+
+**COSMOS vs THREAD (both stores, different data):** thread (Azure/SRE) = conversation CONTENT; Cosmos (portal) = session METADATA (title/product/updatedAt) + POINTER to thread_id. Cosmos = user's SESSION DIRECTORY (sidebar list, titles, recovery-after-refresh).
+
+**CONTEXT-WINDOW LIMIT is AGENT-side, invisible to host:** host has NO context concern (streams deltas, never assembles history). Thread = unlimited storage. LLM = where 1M limit bites. Agent LOOP bridges (truncate/summarize).
+
+**MEMORY guards (`all_messages` catch):** bounded 3 ways: `max_messages=2000` (count cap), `start_skip`/tail (fetch only current-turn tail → constant per-poll cost), `page_size=200`. Rebuilt+discarded each poll, NOT accumulated.
+
+**gevent + doc vocabulary:** `gevent` = green+event concurrency lib; greenlets = lightweight cooperative green-threads; `gevent.spawn(fn, arg)` = run concurrently don't block; gunicorn gevent worker runs the app this way. Debug dev server doesn't drive the gevent hub → `if get_debug_flag(): inline else: gevent.spawn`. `doc` = a Cosmos document (JSON record); Cosmos = NoSQL document store.
+
+### 2026-07-14 — Flask backend handler + streaming/SSE deep-dive (Day 4, host side, ~6.5/8 quiz)
+
+Read the actual portal backend (the HOST for the human path). Big streaming/SSE/yield/WebSocket exploration. Checkpoint met: can trace a request handler→Foundry→back and name the border crossing. (NOTE: repo later replaced stream.py with sre_stream.py on the SRE branch — concepts below are the cleaner generic version.)
+
+**The host = portal backend (NOT the agent, NOT Foundry).** Relay + translator + bookkeeper between browser and Foundry. Stores only SESSION METADATA in Cosmos, NOT messages (those live in Foundry conversation).
+
+**3-layer chain (route → handler → stream):**
+- ROUTE `copilot/__init__.py`: `@api.route("/agent/chat", POST)` → checks JSON → delegates. Owns ONLY URL binding.
+- HANDLER `agent/handler.py`: numbered steps: (1) agent ready? (2) validate fail-fast (3) product→agent (4) get/create conversation + Cosmos session (5) StreamingHandler.stream → SSE.
+- STREAMER `agent/stream.py`: calls Foundry, translates events→SSE.
+
+**THE BORDER CROSSING = `responses.create(...)` (stream.py:175):** `responses.create(conversation=id, input=msg, extra_body={agent_reference}, truncation="auto", stream=True)`. Everything BEFORE = portal/host; everything it triggers (loop, LLM, MCP tools, prompt layers) = Foundry far side. `truncation="auto"` = Day-1-Q6 context overflow in one param.
+
+**Host owns vs delegates:** OWNS = HTTP/route/parsing, validation, product→agent, session metadata (Cosmos), conversation ticket, events→SSE, telemetry/title/error-sanitizing. DELEGATES = agent loop, LLM, prompt composition, conversation history, MCP tools, context-window mgmt. Host = relay + bookkeeper, NOT a brain.
+
+**The 3 IDs:** `user_oid` (who) → many `sessionId` (durable container in Cosmos) → `conversationId` (live LLM history in Foundry = coat-check ticket). One session can have MANY conversations over time.
+
+**Coat-check ticket:** browser sends conversationId → continued chat, portal passes ticket, Foundry holds the coat. No id → new empty conversation.
+
+**Fail-fast validation — WHY:** (a) never trust client (curl bypasses UI; boundary validates). (b) SSE-SPECIFIC: streaming is a ONE-WAY DOOR — once opening frame + 200 OK sent, can't cleanly error. Validate BEFORE stream().
+
+**Background write — WHY:** `gevent.spawn(persist_session_doc)` = run concurrently. Cosmos write = 50-200ms; inline → user waits before first token; background → stream immediately. Fail-soft.
+
+**Streamer's real job = ADAPTER:** translates FOUNDRY EVENTS (not SSE) → SSE FRAMES. Two vocabularies. Same pattern as Day-2 SearchClient wrapper.
+
+**STREAMING deep-dive:** = deliver data INCREMENTALLY; ONE call whose RESPONSE arrives in pieces over ONE held-open connection (opens on POST, stays open, streams down, closes after last token — NOT closed between Q and A). BOTH sides stream (browser↔portal SSE `text/event-stream`; portal↔Foundry Responses events). SSE = one-way; WebSocket = two-way (chat apps); video = HTTP segments. `responses.create` = "responses" is the API name, `.create` STARTS a new response, `stream=True` returns stream object immediately.
+
+**`yield`:** = like return but PAUSES the function (freezing state) instead of ending; resumes for next value. Function with yield = GENERATOR. Necessary for streaming: each yield hands out one SSE frame the instant ready → Flask flushes it → resume. Teppanyaki chef (serve as you cook).
+
 ### 2026-07-09 — Prompt layers, folder-vs-flow, ID timing, loop interleaving (Day 3 follow-up → Day 4 bridge)
 
 Deep follow-up after the Day 3 quiz. Kept probing the prompt/loop boundary and reconstructed how prompt-invocation interleaves with the agent loop — the crux of agent architecture.
