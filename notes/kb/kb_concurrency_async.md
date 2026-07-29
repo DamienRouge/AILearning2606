@@ -11,7 +11,7 @@ metadata:
 
 > **How to read this file:** PART 1 = general, transferable concurrency knowledge (applies to any language/stack). PART 2 = how WCX uses it (gevent greenlets, non-blocking polling). PART 3 = takeaways.
 > **Why this file exists:** concurrency showed up as asides across your notes (gevent, `gevent.spawn`, non-blocking poll `sleep`, generators/`yield`, async fetch, "don't block the first token"). It deserves one consolidated mental model — it's the backbone under streaming AND the background writes.
-> **Related:** [[kb-streaming-pipeline]] (generators, non-blocking IO), [[kb-distributed-systems-patterns]], [[kb-storage-model]] (background Cosmos write off the critical path).
+> **Related:** [[kb-streaming-pipeline]] (generators, non-blocking IO), [[kb-distributed-systems-patterns]], [[kb-storage-model]] (background Cosmos write off the critical path). [[kb-harness-engineering]] (the capstone — concurrency powers L5 orchestration).
 
 ---
 ## PART 0 — WHY THIS MATTERS (philosophy & real-world connection)

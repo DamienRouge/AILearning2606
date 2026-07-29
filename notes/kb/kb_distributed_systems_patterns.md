@@ -11,7 +11,7 @@ metadata:
 
 > **How to read this file:** PART 1 = general patterns that recur across every backend system. PART 2 = where each shows up in WCX. PART 3 = takeaways. This file is the "why is the same idea everywhere" consolidation.
 > **Why this file exists:** the same handful of principles — statelessness, idempotency, verify-don't-blind-retry, policy-vs-mechanism, "this repo consumes a managed-service artifact" — recurred across every other note. Naming them once, generally, is more valuable than re-deriving them per topic.
-> **Related:** [[kb-storage-model]] (statelessness/where state lives), [[kb-streaming-pipeline]] (idempotent send, snapshot polling), [[kb-agent-loop]], [[kb-concurrency-async]], [[kb-auth-infra]], [[kb-rag-retrieval]].
+> **Related:** [[kb-storage-model]] (statelessness/where state lives), [[kb-streaming-pipeline]] (idempotent send, snapshot polling), [[kb-agent-loop]], [[kb-concurrency-async]], [[kb-auth-infra]], [[kb-rag-retrieval]]. [[kb-harness-engineering]] (the capstone — these patterns harden L1/L5/L6).
 
 ---
 ## PART 0 — WHY THIS MATTERS (philosophy & real-world connection)

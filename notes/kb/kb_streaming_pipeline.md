@@ -11,7 +11,7 @@ metadata:
 
 > **How to read this file:** the first half is GENERAL streaming knowledge (transferable to any system/job/interview). The second half (marked "WORKED EXAMPLE") is how the WCX repo instantiates it. Learn the general model; use the repo to make it concrete.
 > **Trust status:** repo specifics verified against live code 2026-07-28; re-grep symbols before citing line numbers. General concepts are stable industry knowledge.
-> **Related:** [[kb-concurrency-async]] (generators/yield, non-blocking IO that make streaming work), [[kb-distributed-systems-patterns]] (idempotency, statelessness), [[kb-agent-loop]] (what produces the stream), [[kb-frontend-architecture]] (browser-side consumption).
+> **Related:** [[kb-concurrency-async]] (generators/yield, non-blocking IO that make streaming work), [[kb-distributed-systems-patterns]] (idempotency, statelessness), [[kb-agent-loop]] (what produces the stream), [[kb-frontend-architecture]] (browser-side consumption). [[kb-harness-engineering]] (the capstone — streaming is how the harness delivers L1 output).
 
 ---
 ## PART 0 — WHY THIS MATTERS (philosophy & real-world connection)

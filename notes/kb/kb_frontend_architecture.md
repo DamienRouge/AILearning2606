@@ -11,7 +11,7 @@ metadata:
 
 > **How to read this file:** the first half is GENERAL React/frontend knowledge (transferable to any React app / job / interview) — written for a BACKEND engineer, so frontend jargon is explained as it appears. The second half (marked "WORKED EXAMPLE") is how the WCX repo instantiates it. Learn the general model; use the repo to make it concrete.
 > **Trust status:** repo specifics — send-chain files (`QuestionInput.tsx`→`Copilot.tsx`→`useAgentChat.ts`→`Copilot.api.ts`), `appendTextDelta`/`textFromSegments`/`reconcileReasoningTool` (agentSegments.ts), reducer actions, and stop/resume/detach — verified against live code through 2026-07-28; re-grep symbols before citing line numbers. React fundamentals are stable, language-general knowledge (not repo-specific).
-> **Related:** [[kb-streaming-pipeline]] (the receive/render half — how the SSE stream is consumed and rendered), [[kb-storage-model]] (the durable client transcript / Cosmos sessions), [[kb-agent-loop]] (what the frontend is talking to server-side).
+> **Related:** [[kb-streaming-pipeline]] (the receive/render half — how the SSE stream is consumed and rendered), [[kb-storage-model]] (the durable client transcript / Cosmos sessions), [[kb-agent-loop]] (what the frontend is talking to server-side). [[kb-harness-engineering]] (the capstone — the UI that drives + gates the harness).
 
 ---
 ## PART 0 — WHY THIS MATTERS (philosophy & real-world connection)

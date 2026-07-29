@@ -11,7 +11,7 @@ metadata:
 
 > **How to read this file:** the first half is GENERAL auth/identity knowledge (transferable to any cloud/job/interview — AWS, GCP, Azure, Kubernetes). The second half (marked "WORKED EXAMPLE") is how the WCX repo instantiates it. Learn the general model; use the repo to make it concrete.
 > **Trust status:** conceptually solid (Day 6, ~5/6 quiz), read against credential.py / keyvault.py. The MI token mechanism (Entra issues+signs, not the resource) and the OBO cache-key rule are the two load-bearing correctness facts — both understood precisely. File:line details NOT re-verified 2026-07-28; re-grep `get_azure_credential` / `get_obo_credential` / `NonClosingCredential` before citing exact lines. General concepts are stable industry knowledge.
-> **Related:** [[kb-rag-retrieval]] (`get_azure_credential` sits under every client), [[kb-storage-model]] (what the tokens unlock), [[kb-distributed-systems-patterns]] (caching, trust boundaries, verify-don't-trust).
+> **Related:** [[kb-rag-retrieval]] (`get_azure_credential` sits under every client), [[kb-storage-model]] (what the tokens unlock), [[kb-distributed-systems-patterns]] (caching, trust boundaries, verify-don't-trust). [[kb-harness-engineering]] (the capstone — auth guards L2 tool executors).
 
 ---
 ## PART 0 — WHY THIS MATTERS (philosophy & real-world connection)

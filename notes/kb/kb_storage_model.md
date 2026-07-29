@@ -12,7 +12,7 @@ metadata:
 > **How to read this file:** the first half is GENERAL state/storage knowledge (transferable to any system/job/interview). The second half (marked "WORKED EXAMPLE") is how the WCX repo instantiates it. Learn the general model; use the repo to make it concrete.
 > **Trust status:** `build_session_doc` fields + the thread/Cosmos split verified against code across Days 4-7. The SRE **thread** is a managed-service store (its schema is Azure's, not this repo's) — this repo only holds the `thread_id` pointer. The 3-IDs model and reload path are code-backed. General concepts are stable industry knowledge.
 > **Why this file exists:** the #1 source of confusion was "where does history actually live" — this file pins down the distinct stores (managed thread / Cosmos metadata / in-memory client) so "does X survive reload?" has a definite answer.
-> **Related:** [[kb-agent-loop]] (thread = the LLM's context; the loop's state lives in the store), [[kb-streaming-pipeline]] (the thread is what gets polled), [[kb-frontend-architecture]] (client-side transcript), [[kb-distributed-systems-patterns]] (statelessness, idempotency, at-least/at-most-once).
+> **Related:** [[kb-agent-loop]] (thread = the LLM's context; the loop's state lives in the store), [[kb-streaming-pipeline]] (the thread is what gets polled), [[kb-frontend-architecture]] (client-side transcript), [[kb-distributed-systems-patterns]] (statelessness, idempotency, at-least/at-most-once). [[kb-harness-engineering]] (the capstone — this is L3 memory + Law 5 state).
 
 ---
 ## PART 0 — WHY THIS MATTERS (philosophy & real-world connection)
